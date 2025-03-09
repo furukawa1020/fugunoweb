@@ -1,5 +1,5 @@
 import { initializeApp } from "firebase/app";
-import { getFirestore, collection, doc, setDoc, getDoc ,getDocs, deleteDoc, serverTimestamp } from "firebase/firestore";
+import { getFirestore, collection, doc, setDoc, getDoc ,getDocs, deleteDoc, serverTimestamp, query, orderBy, limit} from "firebase/firestore";
 
 const firebaseConfig = {
     apiKey: "AIzaSyCImfkIYX3RAyvcu7tYZxt9oWkO2fLJDIs",
@@ -14,6 +14,30 @@ const firebaseConfig = {
 // Firebase アプリを初期化
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
+// Firestore からデータを取得する関数
+// Firestore から `users/data001` を取得する関数
+// Firebase 初期化
+
+// ドキュメント ID の数値部分が最大のデータを取得
+const fetchUserData = async () => {
+  try {
+    const q = query(collection(db, "users"), orderBy("timestamp", "desc"));
+    console.log(q);
+    const querySnapshot = await getDocs(q);
+
+    if (!querySnapshot.empty) {
+      const maxDoc = querySnapshot.docs[0];
+      console.log("最大のIDを持つデータ:", maxDoc.id, maxDoc.data());
+      return { id: maxDoc.id, data: maxDoc.data() };
+    } else {
+      console.log("データがありません");
+      return null;
+    }
+  } catch (error) {
+    console.error("データ取得エラー:", error);
+    return null;
+  }
+};
 
 // Firestore の全データを削除する関数
 const deleteAllDocuments = async () => {
@@ -109,7 +133,7 @@ const saveToFirestore = async (value) => {
         const count = snapshot.size + 1; // 連番を決定
 
         // 連番のドキュメント ID を作成
-        const docId = `data${String(count).padStart(3, '0')}`; // "data001" 形式
+        const docId = `data${String(count).padStart(5, '0')}`; // "data001" 形式
 
         // Firestore にデータを保存
         await setDoc(doc(usersCollection, docId), {
@@ -145,4 +169,4 @@ const getFitbitConfig = async () => {
     }
   };
 
-export { db, saveToFirestore, updateTokens, getFitbitConfig, updateAccessToken};
+export { db, saveToFirestore, updateTokens, getFitbitConfig, updateAccessToken, fetchUserData};

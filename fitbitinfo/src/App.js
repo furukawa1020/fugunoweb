@@ -1,15 +1,17 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef} from "react";
 import { ScatterChart, Scatter, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
-import {getFitbitConfig, saveToFirestore, updateTokens, updateAccessToken} from "./firebase";
-
+import {getFitbitConfig, saveToFirestore, updateTokens, updateAccessToken, fetchUserData} from "./firebase";
+let firstflag = true;
 function App() {
   const [rrData, setRrData] = useState([]);
-
+  const isFirstRun = useRef(true);
   // Fitbit API から心拍数データを取得し、直近1分間のデータに対して補完・変動付RRデータを作成する関数
   const fetchHeartRateData = useCallback(async () => {
     
     const config = await getFitbitConfig();  
     console.log(config);
+    const latestdata = await fetchUserData()
+    console.log(latestdata);
     const clientId = config.clientId;
     const secretId = config.secretId;
     let accessToken = config.accessToken;
@@ -28,8 +30,7 @@ function App() {
       });
       if(response.status==401){
         console.log("Access token expired. Refreshing...");
-        console.log("clientId:", clientId);
-        console.log("clientSecret:", secretId);
+        //console.log("fetchdata=", fetchData);
 
         const token = await updateAccessToken(refreshToken, clientId, secretId);
         if(token){
@@ -103,7 +104,10 @@ function App() {
 
   // fetchHeartRateData を30秒ごとに実行
   useEffect(() => {
-    fetchHeartRateData();
+    if(isFirstRun.current){
+      isFirstRun.current = false;
+      fetchHeartRateData(); 
+    }
     const interval = setInterval(fetchHeartRateData, 30000);
     return () => clearInterval(interval);
   }, [fetchHeartRateData]);
@@ -141,30 +145,51 @@ if (rrPlotData.length > 1) {
   console.log("centerX (s):", centerX, "centerY (s):", centerY, "relax (s):", relax);
 }
   return (
-    <div className="App">
-      <h1>RR Point Plot  Relax: {relax}</h1>
-      <ResponsiveContainer width="90%" height={400}>
-        <ScatterChart>
-          <CartesianGrid strokeDasharray="3 3" />
-          <XAxis 
-            dataKey="x" 
-            type="number"
-            name="RR(n-1)" 
-            unit="ms" 
-            label={{ value: "RR Interval (n-1)", position: "insideBottomRight", offset: -5 }} 
-            domain={[0, 1500]}  // x軸の範囲を 0~1500ms に設定
-          />
-          <YAxis 
-            dataKey="y" 
-            name="RR(n)" 
-            unit="ms" 
-            label={{ value: "RR Interval (n)", angle: -90, position: "insideLeft" }} 
-          />
-          <Tooltip cursor={{ strokeDasharray: '3 3' }} />
-          <Scatter name="RR Plot" data={rrPlotData} fill="#8884d8" />
-        </ScatterChart>
-      </ResponsiveContainer>
-    </div>
+<div className="App" style={{ display: "flex", justifyContent: "center", alignItems: "center" }}>
+  <div style={{ width: "100%", maxWidth: "600px" }}> {/* グラフの中央配置用 */}
+    <h1 style={{ textAlign: "center" }}>RR Point Plot</h1>
+    <h2 style={{textAlign: "center"}}>Relax: {relax}</h2>
+    <ResponsiveContainer width="100%" height={300}>
+      <ScatterChart margin={{ top: 20, right: 20, bottom: 50, left: 60 }}>  {/* 余白を増やす */}
+        <CartesianGrid strokeDasharray="3 3" />
+        
+        <XAxis 
+          dataKey="x" 
+          type="number"
+          name="RR(n-1)" 
+          unit="ms" 
+          domain={[0, 1500]}  
+          ticks={[0, 500, 1000, 1500]}
+          label={{ 
+            value: "RR Interval (n-1)", 
+            position: "insideBottom", 
+            dy: 30  // 位置を下げる
+          }} 
+        />
+       
+        <YAxis 
+          dataKey="y" 
+          name="RR(n)" 
+          unit="ms"
+          domain={[0, 1500]}  
+          ticks={[0, 500, 1000, 1500]}
+          label={{ 
+            value: "RR Interval (n)", 
+            angle: -90, 
+            position: "insideBottom", 
+            dx: -50,  // 位置を調整
+            dy: -100 
+          }} 
+        />
+
+        <Tooltip cursor={{ strokeDasharray: '3 3' }} />
+        <Scatter name="RR Plot" data={rrPlotData} fill="#8884d8" />
+      </ScatterChart>
+    </ResponsiveContainer>
+
+  </div>
+</div>
+
   );
 }
 
