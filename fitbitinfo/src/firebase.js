@@ -18,7 +18,7 @@ const db = getFirestore(app);
 // Firestore から `users/data001` を取得する関数
 // Firebase 初期化
 
-// ドキュメント ID の数値部分が最大のデータを取得
+// もっとも最近追加されたデータを取得する 
 const fetchUserData = async () => {
   try {
     const q = query(collection(db, "users"), orderBy("timestamp", "desc"));
@@ -103,7 +103,7 @@ const updateTokens = async (accessToken, refreshToken) => {
         return;
       }
 
-      const tokenRef = doc(db, "config", "config");
+      const tokenRef = doc(db, "config", "config2");
       await setDoc(tokenRef, {
         access_token: accessToken,
         refresh_token: refreshToken,
@@ -149,7 +149,7 @@ const saveToFirestore = async (value) => {
 
 const getFitbitConfig = async () => {
     try {
-      const configRef = doc(db, "config", "config");
+      const configRef = doc(db, "config", "config2");
       const configSnap = await getDoc(configRef);
   
       if (configSnap.exists()) {
