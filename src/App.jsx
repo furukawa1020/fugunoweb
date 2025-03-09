@@ -12,7 +12,7 @@ import {
   Legend
 } from 'chart.js';
 
-// Chart.jsの登録
+// Chart.js のスケール登録（エラー防止）
 ChartJS.register(
   CategoryScale,
   LinearScale,
@@ -24,39 +24,53 @@ ChartJS.register(
 );
 
 function App() {
-  const [stressValue, setStressValue] = useState(50);
-  const [stressHistory, setStressHistory] = useState([]);
-  const [timeLabels, setTimeLabels] = useState([]);
-  const [device, setDevice] = useState(null);
-  const [characteristic, setCharacteristic] = useState(null);
-  const [inputDuration, setInputDuration] = useState(5); // ユーザーが入力する時間
-  const startTimeRef = useRef(Date.now());
+  let [relaxationValue, setRelaxationValue] = useState(50); // 現在のリラックス値
+  let [previousRelaxation, setPreviousRelaxation] = useState(50); // 30秒前のリラックス値
+  let [device, setDevice] = useState(null);
+  let [characteristic, setCharacteristic] = useState(null);
+  let [relaxationHistory, setRelaxationHistory] = useState([]);
+  let [timeLabels, setTimeLabels] = useState([]);
+  let [nNew, setNNew] = useState(0);
+  let [expansionState, setExpansionState] = useState("なし");
 
-  // ストレス値の更新処理
-  const handleStressChange = (e) => {
-    const value = parseInt(e.target.value, 10);
-    setStressValue(value);
-  };
+  // 30秒ごとに `previousRelaxation` を更新
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setPreviousRelaxation(relaxationValue); // 直前の値を保存
+    }, 30000);
 
-  // ユーザー入力の変更処理
-  const handleDurationChange = (e) => {
-    setInputDuration(parseInt(e.target.value, 10));
-  };
+    return () => clearInterval(interval);
+  }, [relaxationValue]);
 
-  // ESP32に数値を送信
-  const handleSend = () => {
-    if (characteristic) {
-      sendCommand(characteristic, inputDuration);
-    } else {
-      console.log("⚠️ ESP32に接続されていません！");
+  // 計算と送信
+  useEffect(() => {
+    if (previousRelaxation !== null) {
+      let e = (relaxationValue - previousRelaxation) / previousRelaxation;
+
+      // n の計算式適用
+      let nCalculated = 30 * e / Math.max(Math.abs(e), 0.8);
+      setNNew(Math.round(nCalculated));
+
+      // 膨張 or 収縮の状態を決定
+      let state = nCalculated > 0 ? "膨張" : nCalculated < 0 ? "収縮" : "なし";
+      setExpansionState(state);
+
+      console.log(`相対誤差 e: ${e}`);
+      console.log(`計算された膨張/収縮時間: ${nCalculated}秒 (${state})`);
+
+      if (characteristic) {
+        sendCommand(characteristic, Math.round(nCalculated));
+      }
+
+      setRelaxationHistory((prev) => [...prev, relaxationValue].slice(-30));
+      setTimeLabels((prev) => [...prev, new Date().toLocaleTimeString()].slice(-30));
     }
-  };
+  }, [relaxationValue]); 
 
   return (
     <div className="container mx-auto px-4 py-8 max-w-4xl">
-      <h1 className="text-3xl font-bold text-center mb-8">フグ型デバイス ストレスシミュレーター</h1>
+      <h1 className="text-3xl font-bold text-center mb-8">フグ型デバイス</h1>
 
-      {/* Bluetooth接続ボタン */}
       <div className="mb-4 text-center">
         <button 
           onClick={() => connectToESP32(setDevice, setCharacteristic)}
@@ -66,46 +80,49 @@ function App() {
         </button>
       </div>
 
-      {/* 送信する膨張時間の入力 */}
-      <div className="mb-8 text-center">
-        <label htmlFor="duration-input" className="block text-lg mb-2">
-          送信する膨張時間 (秒):
+      {/* リラックス値の入力 */}
+      <div className="mb-8">
+        <label htmlFor="relaxation-input" className="block text-lg mb-2">
+          リラックス値 (手動入力):
         </label>
         <input
-          id="duration-input"
+          id="relaxation-input"
           type="number"
           min="1"
-          max="30"
-          value={inputDuration}
-          onChange={handleDurationChange}
+          max="200"
+          value={relaxationValue}
+          onChange={(e) => setRelaxationValue(parseFloat(e.target.value))}
           className="w-24 p-2 border rounded text-center"
         />
-        <button 
-          onClick={handleSend} 
-          className="ml-4 px-4 py-2 bg-green-500 text-white rounded"
-        >
-          送信
-        </button>
       </div>
 
-      {/* ストレス値入力 */}
-      <div className="mb-8">
-        <label htmlFor="stress-input" className="block text-lg mb-2">
-          ストレス値を入力 (0-200):
-        </label>
-        <input
-          id="stress-input"
-          type="range"
-          min="0"
-          max="200"
-          value={stressValue}
-          onChange={handleStressChange}
-          className="w-full h-4 bg-gray-200 rounded-lg appearance-none cursor-pointer"
-        />
-        <div className="flex justify-between mt-2">
-          <span>0</span>
-          <span>100</span>
-          <span>200</span>
+      {/* 30秒前のリラックス値 */}
+      <div className="bg-gray-100 rounded-lg p-4 mb-4 text-center">
+        <h2 className="text-xl font-semibold">30秒前のリラックス値: {previousRelaxation}</h2>
+      </div>
+
+      {/* n値と膨張・収縮状態 */}
+      <div className="bg-gray-100 rounded-lg p-4 mb-4 text-center">
+        <h2 className="text-xl font-semibold">送信する時間: {nNew} 秒</h2>
+        <h2 className="text-xl font-semibold">フグの状態: {expansionState}</h2>
+      </div>
+
+      {/* リラックス値の推移グラフ */}
+      <div className="bg-white rounded-lg p-4 shadow">
+        <h2 className="text-xl font-semibold mb-4">リラックス値の推移</h2>
+        <div className="h-64">
+          <Line 
+            data={{
+              labels: timeLabels,
+              datasets: [{
+                label: 'リラックス値',
+                data: relaxationHistory,
+                borderColor: 'rgb(75, 192, 192)',
+                backgroundColor: 'rgba(75, 192, 192, 0.5)',
+                tension: 0.1,
+              }]
+            }} 
+          />
         </div>
       </div>
     </div>
@@ -113,4 +130,3 @@ function App() {
 }
 
 export default App;
-
