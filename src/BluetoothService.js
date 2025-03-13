@@ -1,3 +1,5 @@
+import { checkConnectionStatus } from '../BluetoothService';
+
 export async function connectToESP32(setDevice, setCharacteristic) {
     try {
         console.log("🔍 スキャン開始...");
@@ -34,4 +36,38 @@ export async function sendCommand(characteristic, duration) {
 
     console.log(`📡 ESP32 に送信: ${command} 秒`);
 }
+
+export function checkConnectionStatus(device) {
+    if (!device) {
+        console.log("❌ デバイスが接続されていません");
+        return false;
+    }
+    
+    const isConnected = device.gatt.connected;
+    console.log(`🔌 接続状態: ${isConnected ? "接続中" : "切断"}`);
+    return isConnected;
+}
+
+export function addDisconnectListener(device, onDisconnect) {
+    if (device) {
+        device.addEventListener('gattserverdisconnected', () => {
+            console.log("📢 デバイスが切断されました");
+            onDisconnect && onDisconnect();
+        });
+    }
+}
+
+const BluetoothControl = () => {
+    const checkStatus = () => {
+        const status = checkConnectionStatus(device);
+        // 接続状態に応じてUIを更新
+        setIsConnected(status);
+    };
+
+    return (
+        <button onClick={checkStatus}>
+            接続状態を確認
+        </button>
+    );
+};
 

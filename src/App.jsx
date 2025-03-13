@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Line } from 'react-chartjs-2';
 import { connectToESP32, sendCommand } from './BluetoothService';
+import BluetoothStatus from './components/BluetoothStatus';
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -23,6 +24,26 @@ ChartJS.register(
   Legend
 );
 
+const chartOptions = {
+  responsive: true,
+  scales: {
+    y: {
+      beginAtZero: true,
+      max: 200,
+      title: {
+        display: true,
+        text: 'リラックス値'
+      }
+    },
+    x: {
+      title: {
+        display: true,
+        text: '時間'
+      }
+    }
+  }
+};
+
 function App() {
   let [relaxationValue, setRelaxationValue] = useState(50); // 現在のリラックス値
   let [previousRelaxation, setPreviousRelaxation] = useState(50); // 30秒前のリラックス値
@@ -32,6 +53,7 @@ function App() {
   let [timeLabels, setTimeLabels] = useState([]);
   let [nNew, setNNew] = useState(0);
   let [expansionState, setExpansionState] = useState("なし");
+  const [isConnecting, setIsConnecting] = useState(false);
 
   // 30秒ごとに `previousRelaxation` を更新
   useEffect(() => {
@@ -67,17 +89,46 @@ function App() {
     }
   }, [relaxationValue]); 
 
+  useEffect(() => {
+    if (device) {
+      const handleDisconnect = () => {
+        setDevice(null);
+        setCharacteristic(null);
+        alert('デバイスが切断されました');
+      };
+      
+      device.addEventListener('gattserverdisconnected', handleDisconnect);
+      
+      return () => {
+        device.removeEventListener('gattserverdisconnected', handleDisconnect);
+      };
+    }
+  }, [device]);
+
+  const handleConnect = async () => {
+    try {
+      setIsConnecting(true);
+      await connectToESP32(setDevice, setCharacteristic);
+    } catch (error) {
+      alert('接続に失敗しました: ' + error.message);
+    } finally {
+      setIsConnecting(false);
+    }
+  };
+
   return (
     <div className="container mx-auto px-4 py-8 max-w-4xl">
       <h1 className="text-3xl font-bold text-center mb-8">フグ型デバイス</h1>
 
       <div className="mb-4 text-center">
         <button 
-          onClick={() => connectToESP32(setDevice, setCharacteristic)}
-          className="px-4 py-2 bg-blue-500 text-white rounded"
+          onClick={handleConnect}
+          className={`px-4 py-2 ${isConnecting ? 'bg-gray-500' : 'bg-blue-500'} text-white rounded`}
+          disabled={isConnecting}
         >
-          {device ? "ESP32接続済み" : "ESP32と接続"}
+          {isConnecting ? "接続中..." : device ? "ESP32接続済み" : "ESP32と接続"}
         </button>
+        <BluetoothStatus device={device} />
       </div>
 
       {/* リラックス値の入力 */}
@@ -91,8 +142,14 @@ function App() {
           min="1"
           max="200"
           value={relaxationValue}
-          onChange={(e) => setRelaxationValue(parseFloat(e.target.value))}
+          onChange={(e) => {
+            const value = parseFloat(e.target.value);
+            if (value >= 1 && value <= 200) {
+              setRelaxationValue(value);
+            }
+          }}
           className="w-24 p-2 border rounded text-center"
+          required
         />
       </div>
 
@@ -122,6 +179,7 @@ function App() {
                 tension: 0.1,
               }]
             }} 
+            options={chartOptions}
           />
         </div>
       </div>
